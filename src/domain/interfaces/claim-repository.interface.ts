@@ -1,10 +1,13 @@
-import { Claim } from '../entities/claim.entity';
+import { Claim, VerificationStatus } from '../entities/claim.entity';
 
 export interface IClaimRepository {
   save(claim: Claim): Promise<Claim>;
   findById(id: string): Promise<Claim | null>;
-  findByUserId(userId: string): Promise<Claim[]>;
-  findAll(): Promise<Claim[]>;
-  update(id: string, claim: Partial<Claim>): Promise<Claim>;
+  find(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    status?: VerificationStatus;
+    confidenceLevel?: string;
+  }): Promise<Claim[]>;
   delete(id: string): Promise<void>;
 } 

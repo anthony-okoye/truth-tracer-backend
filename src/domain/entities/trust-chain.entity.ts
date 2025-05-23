@@ -1,18 +1,19 @@
-export interface SourceNode {
-  id: string;
-  type: 'SOCIAL_MEDIA' | 'NEWS' | 'BLOG' | 'YOUTUBE' | 'OTHER';
-  url: string;
-  credibility: number; // 0-100
-  timestamp: Date;
+export class SourceNode {
+  constructor(
+    public url: string,
+    public title: string,
+    public credibility: number,
+    public timestamp: Date
+  ) {}
 }
 
 export class TrustChain {
   constructor(
-    public readonly id: string,
-    public readonly claimId: string,
-    public readonly originalSource: SourceNode,
-    public readonly propagationPath: SourceNode[],
-    public readonly createdAt: Date,
-    public readonly updatedAt: Date,
+    public id: string,
+    public claimId: string,
+    public originalSource: string,
+    public propagationPath: SourceNode[],
+    public createdAt: Date,
+    public updatedAt: Date
   ) {}
 } 
