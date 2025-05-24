@@ -3,31 +3,26 @@ export const trustChainTemplate = {
 
 RESPONSE FORMAT:
 {
-  "originalSource": {
-    "url": "Source URL",
-    "type": "Source type (social media, news, etc.)",
-    "credibility": "High/Medium/Low",
-    "timestamp": "ISO date string",
-    "context": "Source context and background"
-  },
-  "propagationPath": [
+  "hasTrustChain": boolean,
+  "confidence": number (0-1),
+  "sources": [
     {
-      "url": "Propagation URL",
-      "type": "Platform type",
-      "credibility": "High/Medium/Low",
-      "timestamp": "ISO date string",
-      "modifications": "Any changes to original claim",
-      "reach": "Estimated audience reach"
+      "name": "Source name",
+      "url": "Source URL",
+      "reliability": number (0-1)
     }
-  ]
+  ],
+  "explanation": "Detailed explanation of the trust chain analysis",
+  "gaps": ["List of gaps or weaknesses in the trust chain"],
+  "context": "Additional context about the trust chain analysis"
 }
 
 GUIDELINES:
-1. Identify original source with high confidence
-2. Track claim modifications
-3. Assess credibility changes
-4. Consider platform influence
-5. Include temporal analysis
-6. Note verification status`,
+1. Assess if the claim has a verifiable trust chain
+2. Calculate confidence based on source reliability
+3. List all relevant sources with their reliability scores
+4. Explain the trust chain analysis in detail
+5. Identify any gaps or weaknesses
+6. Provide additional context if relevant`,
   max_tokens: 1000
 }; 

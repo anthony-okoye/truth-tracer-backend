@@ -40,22 +40,25 @@ async function testClaim() {
     // Trust Chain Results
     if (result.trustChain) {
       logger.log('\nTrust Chain:');
-      logger.log('Original Source:');
-      logger.log(`URL: ${result.trustChain.originalSource.url}`);
-      logger.log(`Type: ${result.trustChain.originalSource.type}`);
-      logger.log(`Credibility: ${result.trustChain.originalSource.credibility}`);
-      logger.log(`Context: ${result.trustChain.originalSource.context}`);
-
-      if (result.trustChain.propagationPath?.length > 0) {
-        logger.log('\nPropagation Path:');
-        result.trustChain.propagationPath.forEach((node, index) => {
-          logger.log(`\n${index + 1}. ${node.url}`);
-          logger.log(`   Type: ${node.type}`);
-          logger.log(`   Credibility: ${node.credibility}`);
-          logger.log(`   Modifications: ${node.modifications}`);
-          logger.log(`   Reach: ${node.reach}`);
+      logger.log(`Has Trust Chain: ${result.trustChain.hasTrustChain}`);
+      logger.log(`Confidence: ${result.trustChain.confidence}`);
+      logger.log(`Explanation: ${result.trustChain.explanation}`);
+      
+      if (result.trustChain.sources?.length > 0) {
+        logger.log('\nSources:');
+        result.trustChain.sources.forEach((source, index) => {
+          logger.log(`${index + 1}. ${source.name} (${source.url}) - Reliability: ${source.reliability}`);
         });
       }
+
+      if (result.trustChain.gaps?.length > 0) {
+        logger.log('\nGaps:');
+        result.trustChain.gaps.forEach((gap, index) => {
+          logger.log(`${index + 1}. ${gap}`);
+        });
+      }
+
+      logger.log(`\nContext: ${result.trustChain.context}`);
     }
 
     // Socratic Reasoning Results

@@ -53,52 +53,35 @@ export class PropagationNode {
   reach: string;
 }
 
+export class Source {
+  @ApiProperty({ description: 'Name of the source' })
+  name: string;
+
+  @ApiProperty({ description: 'URL of the source' })
+  url: string;
+
+  @ApiProperty({ description: 'Reliability score of the source (0-1)' })
+  reliability: number;
+}
+
 export class TrustChainResponse {
-  @ApiProperty({
-    description: 'Whether the claim has a verifiable trust chain',
-    example: true
-  })
+  @ApiProperty({ description: 'Whether the claim has a verifiable trust chain' })
   hasTrustChain: boolean;
 
-  @ApiProperty({
-    description: 'Confidence score of the trust chain analysis (0-1)',
-    example: 0.85
-  })
+  @ApiProperty({ description: 'Confidence score in the trust chain analysis (0-1)' })
   confidence: number;
 
-  @ApiProperty({
-    description: 'List of sources in the trust chain',
-    example: [
-      {
-        name: 'NASA Official Website',
-        url: 'https://www.nasa.gov',
-        reliability: 0.95
-      }
-    ]
-  })
-  sources: Array<{
-    name: string;
-    url: string;
-    reliability: number;
-  }>;
+  @ApiProperty({ description: 'List of sources in the trust chain', type: [Source] })
+  sources: Source[];
 
-  @ApiProperty({
-    description: 'Explanation of the trust chain analysis',
-    example: 'The claim can be traced through multiple reliable sources.'
-  })
+  @ApiProperty({ description: 'Detailed explanation of the trust chain analysis' })
   explanation: string;
 
-  @ApiProperty({
-    description: 'Gaps or weaknesses in the trust chain',
-    example: ['Some sources are not directly accessible']
-  })
-  gaps?: string[];
+  @ApiProperty({ description: 'List of gaps or weaknesses in the trust chain' })
+  gaps: string[];
 
-  @ApiProperty({
-    description: 'Additional context about the trust chain analysis',
-    example: 'The claim has been verified by multiple independent sources.'
-  })
-  context?: string;
+  @ApiProperty({ description: 'Additional context about the trust chain analysis' })
+  context: string;
 
   @ValidateNested()
   @Type(() => OriginalSource)
