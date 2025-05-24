@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import type { AxiosError } from 'axios';
 import { ISonarService } from '../../domain/interfaces/sonar.interface';
 import { Claim, ClaimRating, VerificationStatus } from '../../domain/entities/claim.entity';
 import { TrustChain, SourceNode } from '../../domain/entities/trust-chain.entity';
@@ -17,26 +16,8 @@ import { AnalysisModel } from '../../domain/dtos/claim-analysis.dto';
 import { SonarResponseDto } from './dto/sonar-response.dto';
 
 interface PerplexityResponse {
-  id: string;
-  model: string;
-  created: number;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-    search_context_size: string;
-  };
-  citations: string[];
-  object: string;
   choices: Array<{
-    index: number;
-    finish_reason: string;
     message: {
-      role: string;
-      content: string;
-    };
-    delta: {
-      role: string;
       content: string;
     };
   }>;
@@ -66,10 +47,9 @@ export class SonarClient implements ISonarService {
   }
 
   private async makeApiRequest(endpoint: string, data: any, retryCount = 0): Promise<any> {
-    const requestId = crypto.randomUUID();
     try {
-      this.logger.debug(`[${requestId}] Making API request to ${this.baseUrl}${endpoint}`);
-      this.logger.debug(`[${requestId}] Request data: ${JSON.stringify(data, null, 2)}`);
+      this.logger.debug(`Making API request to ${this.baseUrl}${endpoint}`);
+      this.logger.debug(`Request data: ${JSON.stringify(data, null, 2)}`);
       
       const response = await axios.post<PerplexityResponse>(
         `${this.baseUrl}${endpoint}`,
@@ -78,82 +58,42 @@ export class SonarClient implements ISonarService {
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
-            'X-Request-ID': requestId,
           },
           timeout: this.timeout,
         }
       );
 
-      this.logger.debug(`[${requestId}] API Response status: ${response.status}`);
-      this.logger.debug(`[${requestId}] API Response headers: ${JSON.stringify(response.headers, null, 2)}`);
-      this.logger.debug(`[${requestId}] API Response data: ${JSON.stringify(response.data, null, 2)}`);
+      this.logger.debug(`API Response status: ${response.status}`);
+      this.logger.debug(`API Response headers: ${JSON.stringify(response.headers, null, 2)}`);
+      this.logger.debug(`API Response data: ${JSON.stringify(response.data, null, 2)}`);
 
-      if (!this.validateResponse(response.data)) {
+      if (!response.data?.choices?.[0]?.message?.content) {
+        this.logger.error('Invalid response format. Full response:', response.data);
         throw new Error('Invalid response format from Sonar API');
       }
 
       return response.data;
     } catch (error) {
-      const axiosError = error as AxiosError;
-      this.logger.error(`[${requestId}] API Error details:`, {
-        message: axiosError.message,
-        status: axiosError.response?.status,
-        statusText: axiosError.response?.statusText,
-        data: axiosError.response?.data,
-        headers: axiosError.response?.headers,
+      this.logger.error(`API Error details:`, {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
         config: {
-          url: axiosError.config?.url,
-          method: axiosError.config?.method,
-          headers: axiosError.config?.headers,
-          data: axiosError.config?.data
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers,
+          data: error.config?.data
         }
       });
 
-      if (this.shouldRetry(axiosError) && retryCount < this.maxRetries) {
-        const delay = this.calculateRetryDelay(retryCount);
-        this.logger.warn(`[${requestId}] API request failed, retrying (${retryCount + 1}/${this.maxRetries}) after ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+      if (retryCount < this.maxRetries) {
+        this.logger.warn(`API request failed, retrying (${retryCount + 1}/${this.maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay * (retryCount + 1)));
         return this.makeApiRequest(endpoint, data, retryCount + 1);
       }
-      throw this.handleError(axiosError);
-    }
-  }
-
-  private validateResponse(response: any): response is PerplexityResponse {
-    return (
-      response &&
-      typeof response === 'object' &&
-      Array.isArray(response.choices) &&
-      response.choices.length > 0 &&
-      response.choices[0].message?.content
-    );
-  }
-
-  private shouldRetry(error: AxiosError): boolean {
-    // Retry on network errors or 5xx server errors
-    return (
-      !error.response ||
-      (error.response.status >= 500 && error.response.status < 600)
-    );
-  }
-
-  private calculateRetryDelay(retryCount: number): number {
-    // Exponential backoff with jitter
-    const baseDelay = this.retryDelay * Math.pow(2, retryCount);
-    const jitter = Math.random() * 1000;
-    return baseDelay + jitter;
-  }
-
-  private handleError(error: AxiosError): Error {
-    if (error.response) {
-      // Server responded with error
-      return new Error(`API Error: ${error.response.status} - ${error.response.statusText}`);
-    } else if (error.request) {
-      // Request made but no response
-      return new Error('No response received from API');
-    } else {
-      // Request setup error
-      return new Error(`Request Error: ${error.message}`);
+      throw error;
     }
   }
 
