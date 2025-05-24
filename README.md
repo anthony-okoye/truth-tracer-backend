@@ -44,7 +44,7 @@ TruthTracer is a misinformation detection platform that uses AI to analyze claim
   - Fact checking with detailed reasoning
   - Source verification and citation
   - Chain-of-thought analysis
-  - Dual-model support (sonar and sonar-pro) for quick and detailed analysis
+  - Parallel processing of multiple analysis methods
 
 - **Trust Chain Tracing**: 
   - Tracks claim propagation across platforms
@@ -58,46 +58,11 @@ TruthTracer is a misinformation detection platform that uses AI to analyze claim
   - Evidence-based conclusions
   - Adaptive reasoning depth
 
-## Sonar Client Implementation
+## API Documentation
 
-The Sonar client provides a flexible and modular approach to claim analysis using Perplexity's Sonar API:
-
-### Model Selection
-- **sonar**: Quick analysis for basic fact-checking
-  - Lower token usage
-  - Faster response times
-  - Basic verification
-
-- **sonar-pro**: Detailed analysis for complex claims
-  - Comprehensive fact-checking
-  - Detailed source verification
-  - In-depth reasoning
-
-### Template System
-The client uses a modular template system for different types of analysis:
-
-1. **Fact Check Templates**
-   - Quick verification format
-   - Detailed analysis format
-   - Source citation structure
-
-2. **Trust Chain Templates**
-   - Basic origin tracing
-   - Comprehensive propagation analysis
-   - Credibility scoring
-
-3. **Socratic Templates**
-   - Basic critical questioning
-   - Comprehensive reasoning tree
-   - Evidence-based conclusions
-
-### Usage Example
-```typescript
-// Quick analysis
-const quickResult = await sonarClient.analyzeClaim(claimText, ModelType.QUICK);
-
-// Detailed analysis
-const detailedResult = await sonarClient.analyzeClaim(claimText, ModelType.DETAILED);
+The API documentation is available through Swagger UI at:
+```
+http://localhost:3000/api/docs
 ```
 
 ## Tech Stack
@@ -106,8 +71,9 @@ const detailedResult = await sonarClient.analyzeClaim(claimText, ModelType.DETAI
 - **Language**: TypeScript
 - **Database**: PostgreSQL
 - **AI Integration**: Perplexity Sonar API
-- **Authentication**: JWT
 - **API Documentation**: OpenAPI/Swagger
+- **Validation**: class-validator
+- **Error Handling**: Custom exception filters
 
 ## Getting Started
 
@@ -132,8 +98,26 @@ npm install
 
 3. Configure environment variables:
 ```bash
-cp .env.example .env
-# Edit .env with your configuration
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=your_password
+DB_DATABASE=truth_tracer
+
+# Sonar API Configuration
+SONAR_API_KEY=your_sonar_api_key
+SONAR_API_URL=https://api.perplexity.ai
+SONAR_TIMEOUT=30000
+SONAR_MAX_RETRIES=3
+SONAR_RETRY_DELAY=1000
 ```
 
 4. Start the application:
@@ -154,60 +138,72 @@ POST /claims/analyze
 Content-Type: application/json
 
 {
-  "input": "Claim to analyze",
-  "modelType": "sonar" | "sonar-pro"  // Optional, defaults to "sonar-pro"
+  "claim": "Claim to analyze"
 }
 ```
 
-### Trust Chain Analysis
+### Health Check
 ```http
-POST /claims/trace
-Content-Type: application/json
+GET /health
+```
 
+## Response Types
+
+### Fact Check Response
+```typescript
 {
-  "claimId": "claim-uuid",
-  "modelType": "sonar" | "sonar-pro"  // Optional, defaults to "sonar-pro"
+  verdict: 'TRUE' | 'FALSE' | 'MISLEADING' | 'UNVERIFIABLE';
+  confidence: number;
+  explanation: string;
+  sources: Array<{
+    title: string;
+    url: string;
+    reliability: 'High' | 'Medium' | 'Low';
+  }>;
+  notes?: string;
 }
 ```
 
-### Socratic Reasoning
-```http
-GET /claims/socratic/:claimId
-Query Parameters:
-  modelType: "sonar" | "sonar-pro"  // Optional, defaults to "sonar-pro"
+### Trust Chain Response
+```typescript
+{
+  hasTrustChain: boolean;
+  confidence: number;
+  sources: Array<{
+    name: string;
+    url: string;
+    reliability: number;
+  }>;
+  explanation: string;
+  gaps?: string[];
+  context?: string;
+}
 ```
 
-### User History
-```http
-GET /claims/history
+### Socratic Reasoning Response
+```typescript
+{
+  conclusion: {
+    logicalValidity: string;
+    keyFlaws: string;
+    strengths: string;
+    recommendations: string;
+  };
+  confidence: number;
+  questions: string[];
+  assumptions: string[];
+  fallacies?: string[];
+  insights?: string;
+}
 ```
 
-### Admin Endpoints
-```http
-GET /claims/admin/all
-```
+## Error Handling
 
-## Clean Architecture
+The API uses custom exception filters to provide consistent error responses:
 
-The application follows Clean Architecture principles:
-
-1. **Domain Layer**: Core business logic and entities
-   - Entities: Claim, TrustChain, SocraticReasoning
-   - Interfaces: Repository and Service contracts
-
-2. **Application Layer**: Use cases and business rules
-   - Use Cases: Claim analysis, trust tracing, reasoning generation
-   - Services: Business logic implementation
-
-3. **Infrastructure Layer**: External services and implementations
-   - Sonar API client
-   - Database repositories
-   - External service integrations
-
-4. **Interface Layer**: API endpoints and data transfer
-   - Controllers
-   - DTOs
-   - Guards and decorators
+- `SonarApiException`: For API-related errors
+- `SonarTimeoutException`: For request timeout errors
+- `SonarConfigurationException`: For configuration errors
 
 ## Contributing
 

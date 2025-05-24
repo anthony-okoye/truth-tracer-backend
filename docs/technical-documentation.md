@@ -40,12 +40,11 @@ The application follows Clean Architecture principles with four distinct layers:
      constructor(
        public readonly id: string,
        public readonly text: string,
-       public readonly metadata: ClaimMetadata,
-       public readonly rating: ClaimRating,
+       public readonly verdict: FactCheckVerdict,
+       public readonly confidence: number,
        public readonly explanation: string,
-       public readonly sources: Citation[],
-       public readonly reasoningSteps: string[],
-       public readonly trustChain?: TrustChain,
+       public readonly sources: Source[],
+       public readonly notes?: string
      ) {}
    }
    ```
@@ -54,12 +53,12 @@ The application follows Clean Architecture principles with four distinct layers:
    ```typescript
    export class TrustChain {
      constructor(
-       public readonly id: string,
-       public readonly claimId: string,
-       public readonly originalSource: SourceNode,
-       public readonly propagationPath: SourceNode[],
-       public readonly createdAt: Date,
-       public readonly updatedAt: Date,
+       public readonly hasTrustChain: boolean,
+       public readonly confidence: number,
+       public readonly sources: Source[],
+       public readonly explanation: string,
+       public readonly gaps?: string[],
+       public readonly context?: string
      ) {}
    }
    ```
@@ -68,12 +67,17 @@ The application follows Clean Architecture principles with four distinct layers:
    ```typescript
    export class SocraticReasoning {
      constructor(
-       public readonly id: string,
-       public readonly claimId: string,
-       public readonly reasoningTree: ReasoningNode[],
+       public readonly conclusion: {
+         logicalValidity: string;
+         keyFlaws: string;
+         strengths: string;
+         recommendations: string;
+       },
+       public readonly confidence: number,
        public readonly questions: string[],
-       public readonly createdAt: Date,
-       public readonly updatedAt: Date,
+       public readonly assumptions: string[],
+       public readonly fallacies?: string[],
+       public readonly insights?: string
      ) {}
    }
    ```
@@ -87,21 +91,22 @@ The Sonar client implements three main functionalities:
 1. **Claim Analysis**
    ```typescript
    async analyzeClaim(text: string): Promise<{
-     rating: ClaimRating;
+     verdict: FactCheckVerdict;
+     confidence: number;
      explanation: string;
-     sources: Citation[];
-     reasoningSteps: string[];
+     sources: Source[];
+     notes?: string;
    }>
    ```
 
 2. **Trust Chain Analysis**
    ```typescript
-   async traceTrustChain(claim: Claim): Promise<TrustChain>
+   async traceTrustChain(claim: string): Promise<TrustChain>
    ```
 
 3. **Socratic Reasoning**
    ```typescript
-   async generateSocraticReasoning(claim: Claim): Promise<SocraticReasoning>
+   async generateSocraticReasoning(claim: string): Promise<SocraticReasoning>
    ```
 
 ### Database Schema
@@ -111,11 +116,11 @@ The Sonar client implements three main functionalities:
 CREATE TABLE claims (
     id UUID PRIMARY KEY,
     text TEXT NOT NULL,
-    metadata JSONB NOT NULL,
-    rating VARCHAR(20) NOT NULL,
+    verdict VARCHAR(20) NOT NULL,
+    confidence DECIMAL NOT NULL,
     explanation TEXT NOT NULL,
     sources JSONB NOT NULL,
-    reasoning_steps TEXT[] NOT NULL,
+    notes TEXT,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
@@ -124,8 +129,12 @@ CREATE TABLE claims (
 CREATE TABLE trust_chains (
     id UUID PRIMARY KEY,
     claim_id UUID REFERENCES claims(id),
-    original_source JSONB NOT NULL,
-    propagation_path JSONB NOT NULL,
+    has_trust_chain BOOLEAN NOT NULL,
+    confidence DECIMAL NOT NULL,
+    sources JSONB NOT NULL,
+    explanation TEXT NOT NULL,
+    gaps TEXT[],
+    context TEXT,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
@@ -134,8 +143,12 @@ CREATE TABLE trust_chains (
 CREATE TABLE socratic_reasoning (
     id UUID PRIMARY KEY,
     claim_id UUID REFERENCES claims(id),
-    reasoning_tree JSONB NOT NULL,
+    conclusion JSONB NOT NULL,
+    confidence DECIMAL NOT NULL,
     questions TEXT[] NOT NULL,
+    assumptions TEXT[] NOT NULL,
+    fallacies TEXT[],
+    insights TEXT,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
@@ -156,43 +169,31 @@ The application implements a consistent error handling strategy:
 
 3. **HTTP Error Responses**
    - 400: Bad Request (validation errors)
-   - 401: Unauthorized (authentication)
-   - 403: Forbidden (authorization)
-   - 404: Not Found
    - 500: Internal Server Error
 
-### Security
+### API Security
 
-1. **Authentication**
-   - JWT-based authentication
-   - Role-based access control
-   - Secure password hashing
+1. **Request Validation**
+   - Input validation using class-validator
+   - Type checking with TypeScript
+   - Sanitization of user input
 
-2. **API Security**
+2. **CORS Configuration**
+   - Configurable allowed origins
+   - Secure headers
    - Rate limiting
-   - Request validation
-   - CORS configuration
-
-3. **Data Security**
-   - Input sanitization
-   - SQL injection prevention
-   - XSS protection
 
 ### Performance Considerations
 
-1. **Caching Strategy**
-   - Redis for caching frequent claims
-   - In-memory caching for static data
-
-2. **Database Optimization**
+1. **Database Optimization**
    - Indexed queries
    - Efficient joins
    - Connection pooling
 
-3. **API Optimization**
+2. **API Optimization**
    - Response compression
-   - Pagination
-   - Batch processing
+   - Request timing middleware
+   - Error handling middleware
 
 ### Monitoring and Logging
 
@@ -202,9 +203,34 @@ The application implements a consistent error handling strategy:
    - Performance metrics
 
 2. **Health Checks**
-   - API health endpoints
+   - API health endpoint
    - Database connectivity
-   - External service status
+   - Service status monitoring
+
+### Environment Configuration
+
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=your_password
+DB_DATABASE=truth_tracer
+
+# Sonar API Configuration
+SONAR_API_KEY=your_sonar_api_key
+SONAR_API_URL=https://api.perplexity.ai
+SONAR_TIMEOUT=30000
+SONAR_MAX_RETRIES=3
+SONAR_RETRY_DELAY=1000
+```
 
 ### Deployment
 

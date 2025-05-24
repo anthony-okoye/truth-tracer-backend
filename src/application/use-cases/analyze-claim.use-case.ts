@@ -6,7 +6,6 @@ import { ITrustTraceAI } from '../../domain/interfaces/ai-services.interface';
 import { ISocraticAI } from '../../domain/interfaces/ai-services.interface';
 import { TrustChain, SourceNode } from '../../domain/entities/trust-chain.entity';
 import { VerificationConfig } from '../../infrastructure/config/verification.config';
-import { UrlContentExtractorService } from '../../infrastructure/services/url-content-extractor.service';
 
 @Injectable()
 export class AnalyzeClaimUseCase {
@@ -17,28 +16,22 @@ export class AnalyzeClaimUseCase {
     @Inject('ITrustTraceAI') private readonly trustTraceAI: ITrustTraceAI,
     @Inject('ISocraticAI') private readonly socraticAI: ISocraticAI,
     @Inject('IClaimRepository') private readonly claimRepository: IClaimRepository,
-    private readonly verificationConfig: VerificationConfig,
-    private readonly urlContentExtractor: UrlContentExtractorService
+    private readonly verificationConfig: VerificationConfig
   ) {}
 
   async execute(input: string): Promise<Claim> {
     try {
       this.logger.log(`Analyzing input: ${input}`);
 
-      // Determine if input is URL or text
-      const isUrl = this.isValidUrl(input);
-      const text = isUrl ? await this.extractTextFromUrl(input) : input;
-
       // Create initial claim with pending verification
       const claim = new Claim(
         crypto.randomUUID(),
-        text,
+        input,
         {
-          source: isUrl ? 'URL_SUBMISSION' : 'USER_SUBMISSION',
+          source: 'USER_SUBMISSION',
           timestamp: new Date(),
           userId: 'system',
-          originalText: text,
-          url: isUrl ? input : undefined
+          originalText: input
         },
         'UNVERIFIABLE' as ClaimRating,
         '',
@@ -53,7 +46,7 @@ export class AnalyzeClaimUseCase {
 
       try {
         // 1. Perform fact checking
-        const factCheckResult = await this.factCheckAI.analyzeClaim(text);
+        const factCheckResult = await this.factCheckAI.analyzeClaim(input);
         if (!factCheckResult) {
           throw new InternalServerErrorException('Fact check analysis failed');
         }
@@ -95,7 +88,7 @@ export class AnalyzeClaimUseCase {
         // 5. Update claim with all results
         const updatedClaim = new Claim(
           savedClaim.id,
-          text,
+          input,
           savedClaim.metadata,
           factCheckResult.rating as ClaimRating,
           factCheckResult.explanation,
@@ -126,7 +119,7 @@ export class AnalyzeClaimUseCase {
         // Update claim status to failed
         const failedClaim = new Claim(
           savedClaim.id,
-          text,
+          input,
           savedClaim.metadata,
           'UNVERIFIABLE' as ClaimRating,
           `Verification failed: ${error.message}`,
@@ -141,19 +134,6 @@ export class AnalyzeClaimUseCase {
       this.logger.error(`Error in analyze claim use case: ${error.message}`);
       throw new InternalServerErrorException(`Failed to process claim: ${error.message}`);
     }
-  }
-
-  private isValidUrl(url: string): boolean {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async extractTextFromUrl(url: string): Promise<string> {
-    return await this.urlContentExtractor.extractContent(url);
   }
 
   private calculateConfidenceScore(

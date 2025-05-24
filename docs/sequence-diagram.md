@@ -1,35 +1,46 @@
 # TruthTracer Sequence Diagrams
 
+## Health Check Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Controller as HealthController
+    participant Service as HealthService
+    participant DB as Database
+
+    Client->>Controller: GET /health
+    Controller->>Service: check()
+    
+    Service->>DB: checkConnection()
+    DB-->>Service: Connection status
+    
+    Service-->>Controller: Health status
+    Controller-->>Client: Health response
+```
+
 ## Claim Analysis Flow
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Controller as AnalysisController
-    participant UseCase as AnalyzeClaimUseCase
+    participant Controller as ClaimAnalysisController
+    participant Service as ClaimAnalysisService
     participant Sonar as SonarClient
     participant DB as Database
 
     Client->>Controller: POST /claims/analyze
     Note over Controller: Validates input DTO
-    Controller->>UseCase: execute(claim, userId)
+    Controller->>Service: analyzeClaim(claim)
     
-    UseCase->>Sonar: analyzeClaim(text)
+    Service->>Sonar: analyzeClaim(text)
     Note over Sonar: Performs fact checking
-    Sonar-->>UseCase: Returns analysis result
+    Sonar-->>Service: Returns analysis result
     
-    UseCase->>Sonar: traceTrustChain(claim)
-    Note over Sonar: Analyzes propagation
-    Sonar-->>UseCase: Returns trust chain
+    Service->>DB: save(claim)
+    DB-->>Service: Returns saved claim
     
-    UseCase->>Sonar: generateSocraticReasoning(claim)
-    Note over Sonar: Generates reasoning tree
-    Sonar-->>UseCase: Returns socratic reasoning
-    
-    UseCase->>DB: save(claim)
-    DB-->>UseCase: Returns saved claim
-    
-    UseCase-->>Controller: Returns complete analysis
+    Service-->>Controller: Returns analysis
     Controller-->>Client: Returns response DTO
 ```
 
@@ -38,25 +49,22 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Controller as AnalysisController
-    participant UseCase as TraceTrustChainUseCase
+    participant Controller as ClaimAnalysisController
+    participant Service as ClaimAnalysisService
     participant Sonar as SonarClient
     participant DB as Database
 
-    Client->>Controller: GET /claims/socratic/:claimId
-    Controller->>UseCase: execute(claimId)
+    Client->>Controller: POST /claims/trace
+    Controller->>Service: traceTrustChain(claim)
     
-    UseCase->>DB: findById(claimId)
-    DB-->>UseCase: Returns claim
-    
-    UseCase->>Sonar: traceTrustChain(claim)
+    Service->>Sonar: traceTrustChain(claim)
     Note over Sonar: Analyzes sources and propagation
-    Sonar-->>UseCase: Returns trust chain
+    Sonar-->>Service: Returns trust chain
     
-    UseCase->>DB: save(trustChain)
-    DB-->>UseCase: Returns saved trust chain
+    Service->>DB: save(trustChain)
+    DB-->>Service: Returns saved trust chain
     
-    UseCase-->>Controller: Returns trust chain
+    Service-->>Controller: Returns trust chain
     Controller-->>Client: Returns response DTO
 ```
 
@@ -65,24 +73,21 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Controller as AnalysisController
-    participant UseCase as GenerateSocraticReasoningUseCase
+    participant Controller as ClaimAnalysisController
+    participant Service as ClaimAnalysisService
     participant Sonar as SonarClient
     participant DB as Database
 
-    Client->>Controller: GET /claims/socratic/:claimId
-    Controller->>UseCase: execute(claimId)
+    Client->>Controller: POST /claims/socratic
+    Controller->>Service: generateSocraticReasoning(claim)
     
-    UseCase->>DB: findById(claimId)
-    DB-->>UseCase: Returns claim
+    Service->>Sonar: generateSocraticReasoning(claim)
+    Note over Sonar: Generates reasoning and questions
+    Sonar-->>Service: Returns socratic reasoning
     
-    UseCase->>Sonar: generateSocraticReasoning(claim)
-    Note over Sonar: Generates reasoning tree and questions
-    Sonar-->>UseCase: Returns socratic reasoning
+    Service->>DB: save(reasoning)
+    DB-->>Service: Returns saved reasoning
     
-    UseCase->>DB: save(reasoning)
-    DB-->>UseCase: Returns saved reasoning
-    
-    UseCase-->>Controller: Returns reasoning
+    Service-->>Controller: Returns reasoning
     Controller-->>Client: Returns response DTO
 ``` 

@@ -1,10 +1,10 @@
 # TruthTracer API Documentation
 
-## Authentication
+## API Documentation
 
-All endpoints (except `/health`) require a valid JWT in the `Authorization` header:
+The API documentation is available through Swagger UI at:
 ```
-Authorization: Bearer <token>
+http://localhost:3000/api/docs
 ```
 
 ---
@@ -13,14 +13,17 @@ Authorization: Bearer <token>
 
 **GET /health**
 
-_Checks the health of the API, database, and Sonar integration._
+_Checks the health of the API and its dependencies._
 
 **Response:**
 ```json
 {
   "status": "ok",
-  "database": "ok",
-  "sonar": "ok"
+  "timestamp": "2024-03-14T12:00:00Z",
+  "services": {
+    "api": "ok",
+    "database": "ok"
+  }
 }
 ```
 
@@ -35,32 +38,67 @@ _Analyzes a claim or text for veracity and reasoning._
 **Request:**
 ```json
 {
-  "input": "COVID-19 vaccines cause infertility."
+  "claim": "COVID-19 vaccines cause infertility."
 }
 ```
 
 **Response:**
 ```json
 {
-  "rating": "FALSE",
+  "verdict": "FALSE",
+  "confidence": 0.95,
   "explanation": "Multiple peer-reviewed studies show no evidence that COVID-19 vaccines cause infertility.",
-  "reasoningSteps": [
-    "Reviewed scientific literature.",
-    "Consulted CDC and WHO sources.",
-    "No credible evidence found linking vaccines to infertility."
-  ],
   "sources": [
     {
       "title": "CDC: Myths and Facts about COVID-19 Vaccines",
       "url": "https://www.cdc.gov/coronavirus/2019-ncov/vaccines/facts.html",
-      "source": "CDC"
+      "reliability": "High"
     },
     {
       "title": "WHO: COVID-19 Vaccines Advice",
       "url": "https://www.who.int/news-room/feature-stories/detail/vaccine-myths",
-      "source": "WHO"
+      "reliability": "High"
     }
-  ]
+  ],
+  "notes": "This claim has been widely debunked by multiple health organizations."
+}
+```
+
+---
+
+## Trust Chain Analysis
+
+**POST /claims/trace**
+
+_Analyzes the trust chain and propagation of a claim._
+
+**Request:**
+```json
+{
+  "claim": "COVID-19 vaccines cause infertility."
+}
+```
+
+**Response:**
+```json
+{
+  "hasTrustChain": true,
+  "confidence": 0.85,
+  "sources": [
+    {
+      "name": "Social Media Post",
+      "url": "https://example.com/post",
+      "reliability": 0.3
+    },
+    {
+      "name": "News Article",
+      "url": "https://example.com/news",
+      "reliability": 0.7
+    }
+  ],
+  "explanation": "The claim originated from a social media post and was later picked up by news outlets.",
+  "gaps": ["Original source of the claim is unclear"],
+  "context": "This claim spread during the early days of COVID-19 vaccination"
 }
 ```
 
@@ -68,113 +106,62 @@ _Analyzes a claim or text for veracity and reasoning._
 
 ## Socratic Reasoning
 
-**GET /claims/socratic/:claimId**
+**POST /claims/socratic**
 
-_Returns a logical reasoning tree and Socratic questions for a claim._
+_Generates Socratic reasoning and questions for a claim._
+
+**Request:**
+```json
+{
+  "claim": "COVID-19 vaccines cause infertility."
+}
+```
 
 **Response:**
 ```json
 {
-  "claimId": "b1a2c3d4-5678-1234-9abc-1234567890ab",
-  "reasoningTree": [
-    {
-      "id": "1",
-      "type": "PREMISE",
-      "content": "COVID-19 vaccines are widely used.",
-      "children": ["2"]
-    },
-    {
-      "id": "2",
-      "type": "EVIDENCE",
-      "content": "No evidence of infertility in large studies.",
-      "children": ["3"]
-    },
-    {
-      "id": "3",
-      "type": "CONCLUSION",
-      "content": "Vaccines do not cause infertility.",
-      "children": []
-    }
-  ],
+  "conclusion": {
+    "logicalValidity": "Invalid",
+    "keyFlaws": "No scientific evidence, contradicts established research",
+    "strengths": "None identified",
+    "recommendations": "Consult medical professionals and scientific literature"
+  },
+  "confidence": 0.9,
   "questions": [
-    "What evidence would support the claim?",
-    "Are there large-scale studies on this topic?",
-    "What do health authorities say?"
-  ]
+    "What evidence supports this claim?",
+    "Have there been any large-scale studies on this topic?",
+    "What do medical authorities say about this claim?"
+  ],
+  "assumptions": [
+    "Vaccines can affect reproductive health",
+    "Infertility is a common side effect"
+  ],
+  "fallacies": [
+    "Appeal to fear",
+    "False cause"
+  ],
+  "insights": "The claim appears to be based on misinformation rather than scientific evidence"
 }
-```
-
----
-
-## User Claim History
-
-**GET /claims/history**
-
-_Returns all claims submitted by the authenticated user._
-
-**Response:**
-```json
-[
-  {
-    "id": "b1a2c3d4-5678-1234-9abc-1234567890ab",
-    "text": "COVID-19 vaccines cause infertility.",
-    "rating": "FALSE",
-    "createdAt": "2024-06-01T12:00:00Z"
-  },
-  {
-    "id": "c2b3a4d5-6789-2345-0bcd-2345678901bc",
-    "text": "The earth is flat.",
-    "rating": "FALSE",
-    "createdAt": "2024-06-02T15:30:00Z"
-  }
-]
-```
-
----
-
-## Admin: All Claims
-
-**GET /claims/admin/all**
-
-_Returns all claims in the system (admin only)._ 
-
-**Response:**
-```json
-[
-  {
-    "id": "b1a2c3d4-5678-1234-9abc-1234567890ab",
-    "text": "COVID-19 vaccines cause infertility.",
-    "userId": "user-123",
-    "rating": "FALSE",
-    "createdAt": "2024-06-01T12:00:00Z"
-  },
-  {
-    "id": "c2b3a4d5-6789-2345-0bcd-2345678901bc",
-    "text": "The earth is flat.",
-    "userId": "user-456",
-    "rating": "FALSE",
-    "createdAt": "2024-06-02T15:30:00Z"
-  }
-]
 ```
 
 ---
 
 ## Error Responses
 
-- **401 Unauthorized**
-```json
-{
-  "statusCode": 401,
-  "message": "Unauthorized"
-}
-```
-
 - **400 Bad Request**
 ```json
 {
   "statusCode": 400,
-  "message": ["input should not be empty"],
+  "message": ["claim should not be empty"],
   "error": "Bad Request"
+}
+```
+
+- **500 Internal Server Error**
+```json
+{
+  "statusCode": 500,
+  "message": "An error occurred while processing your request",
+  "error": "Internal Server Error"
 }
 ``` 
