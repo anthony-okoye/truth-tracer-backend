@@ -2,18 +2,20 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { ISonarService } from '../../domain/interfaces/sonar.interface';
-import { Claim, ClaimRating, VerificationStatus } from '../../domain/entities/claim.entity';
-import { TrustChain, SourceNode } from '../../domain/entities/trust-chain.entity';
-import { SocraticReasoning } from '../../domain/entities/socratic-reasoning.entity';
 import { ClaimVerificationService } from '../../domain/services/claim-verification.service';
-import { TrustChainResult } from '../../domain/interfaces/ai-services.interface';
-import { SocraticReasoningResult } from '../../domain/interfaces/ai-services.interface';
-import { ModelSelectionStrategy } from './strategies/model-selection.strategy';
 import { factCheckTemplate } from './templates/fact-check.template';
 import { trustChainTemplate } from './templates/trust-chain.template';
 import { socraticTemplate } from './templates/socratic.template';
-import { AnalysisModel } from '../../domain/dtos/claim-analysis.dto';
-import { SonarResponseDto } from './dto/sonar-response.dto';
+import { SonarResponseDto, AnalysisStatus } from './dto/sonar-response.dto';
+import { FactCheckResponse } from '../../domain/dtos/fact-check.dto';
+import { TrustChainResponse } from '../../domain/dtos/trust-chain.dto';
+import { SocraticReasoningResponse } from '../../domain/dtos/socratic-reasoning.dto';
+import { 
+  SonarApiException, 
+  SonarTimeoutException, 
+  SonarConfigurationException 
+} from '../../common/exceptions/sonar.exceptions';
+import { ISonarConfig } from '../../domain/interfaces/config.interface';
 
 interface PerplexityResponse {
   choices: Array<{
@@ -26,73 +28,90 @@ interface PerplexityResponse {
 @Injectable()
 export class SonarClient implements ISonarService {
   private readonly logger = new Logger(SonarClient.name);
-  private readonly apiKey: string;
-  private readonly baseUrl: string;
-  private readonly maxRetries = 3;
-  private readonly retryDelay = 1000; // 1 second
-  private readonly timeout: number;
+  private readonly config: ISonarConfig;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly claimVerificationService: ClaimVerificationService
   ) {
-    this.apiKey = this.configService.get<string>('SONAR_API_KEY');
-    this.baseUrl = this.configService.get<string>('SONAR_API_URL');
-    this.timeout = this.configService.get<number>('SONAR_TIMEOUT', 30000); // 30 seconds default
-    
-    if (!this.apiKey || !this.baseUrl) {
-      this.logger.error('Sonar API configuration missing. Please check your environment variables.');
-      throw new Error('Sonar API configuration missing');
-    }
+    this.config = this.validateConfig();
   }
 
-  private async makeApiRequest(endpoint: string, data: any, retryCount = 0): Promise<any> {
+  private validateConfig(): ISonarConfig {
+    const apiKey = this.configService.get<string>('SONAR_API_KEY');
+    const baseUrl = this.configService.get<string>('SONAR_API_URL');
+    const timeout = this.configService.get<number>('SONAR_TIMEOUT', 30000);
+    const maxRetries = this.configService.get<number>('SONAR_MAX_RETRIES', 3);
+    const retryDelay = this.configService.get<number>('SONAR_RETRY_DELAY', 1000);
+
+    if (!apiKey || !baseUrl) {
+      throw new SonarConfigurationException(
+        'Sonar API configuration missing',
+        !apiKey ? 'SONAR_API_KEY' : 'SONAR_API_URL'
+      );
+    }
+
+    return { apiKey, baseUrl, timeout, maxRetries, retryDelay };
+  }
+
+  private async makeApiRequest<T>(
+    endpoint: string, 
+    data: any, 
+    retryCount = 0
+  ): Promise<T> {
     try {
-      this.logger.debug(`Making API request to ${this.baseUrl}${endpoint}`);
-      this.logger.debug(`Request data: ${JSON.stringify(data, null, 2)}`);
+      this.logger.debug(`Making API request to ${this.config.baseUrl}${endpoint}`);
       
       const response = await axios.post<PerplexityResponse>(
-        `${this.baseUrl}${endpoint}`,
+        `${this.config.baseUrl}${endpoint}`,
         data,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${this.config.apiKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: this.timeout,
+          timeout: this.config.timeout,
         }
       );
 
-      this.logger.debug(`API Response status: ${response.status}`);
-      this.logger.debug(`API Response headers: ${JSON.stringify(response.headers, null, 2)}`);
-      this.logger.debug(`API Response data: ${JSON.stringify(response.data, null, 2)}`);
-
       if (!response.data?.choices?.[0]?.message?.content) {
-        this.logger.error('Invalid response format. Full response:', response.data);
-        throw new Error('Invalid response format from Sonar API');
+        throw new SonarApiException(
+          'Invalid response format from Sonar API',
+          500,
+          'INVALID_RESPONSE_FORMAT',
+          response.data
+        );
       }
 
-      return response.data;
+      return JSON.parse(response.data.choices[0].message.content) as T;
     } catch (error) {
-      this.logger.error(`API Error details:`, {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        headers: error.response?.headers,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers,
-          data: error.config?.data
+      if (error && typeof error === 'object' && 'isAxiosError' in error) {
+        if (error.code === 'ECONNABORTED') {
+          throw new SonarTimeoutException(
+            `Request timed out after ${this.config.timeout}ms`,
+            this.config.timeout
+          );
         }
-      });
 
-      if (retryCount < this.maxRetries) {
-        this.logger.warn(`API request failed, retrying (${retryCount + 1}/${this.maxRetries})...`);
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay * (retryCount + 1)));
-        return this.makeApiRequest(endpoint, data, retryCount + 1);
+        if (retryCount < this.config.maxRetries) {
+          this.logger.warn(
+            `API request failed, retrying (${retryCount + 1}/${this.config.maxRetries})...`,
+            error.message
+          );
+          await new Promise(resolve => 
+            setTimeout(resolve, this.config.retryDelay * (retryCount + 1))
+          );
+          return this.makeApiRequest(endpoint, data, retryCount + 1);
+        }
+
+        throw new SonarApiException(
+          error.message,
+          error.response?.status || 500,
+          'API_REQUEST_FAILED',
+          error.response?.data
+        );
       }
+
       throw error;
     }
   }
@@ -103,38 +122,8 @@ export class SonarClient implements ISonarService {
       
       const [factCheckResult, trustChainResult, socraticResult] = await Promise.allSettled([
         this.factCheck(claim),
-        this.trustChain(new Claim(
-          crypto.randomUUID(),
-          claim,
-          {
-            source: 'user_input',
-            timestamp: new Date(),
-            userId: 'system',
-            originalText: claim
-          },
-          'UNVERIFIABLE' as ClaimRating,
-          '',
-          [],
-          [],
-          undefined,
-          VerificationStatus.PENDING
-        )),
-        this.generateSocraticReasoning(new Claim(
-          crypto.randomUUID(),
-          claim,
-          {
-            source: 'user_input',
-            timestamp: new Date(),
-            userId: 'system',
-            originalText: claim
-          },
-          'UNVERIFIABLE' as ClaimRating,
-          '',
-          [],
-          [],
-          undefined,
-          VerificationStatus.PENDING
-        ))
+        this.trustChain(claim),
+        this.generateSocraticReasoning(claim)
       ]);
 
       return {
@@ -154,8 +143,8 @@ export class SonarClient implements ISonarService {
     }
   }
 
-  private async factCheck(claim: string): Promise<any> {
-    const response = await this.makeApiRequest('/chat/completions', {
+  private async factCheck(claim: string): Promise<FactCheckResponse> {
+    return this.makeApiRequest<FactCheckResponse>('/chat/completions', {
       model: 'sonar',
       messages: [
         {
@@ -169,13 +158,10 @@ export class SonarClient implements ISonarService {
       ],
       max_tokens: factCheckTemplate.max_tokens
     });
-
-    const result = response.choices[0].message.content;
-    return JSON.parse(result);
   }
 
-  private async trustChain(claim: Claim): Promise<any> {
-    const response = await this.makeApiRequest('/chat/completions', {
+  private async trustChain(claim: string): Promise<TrustChainResponse> {
+    return this.makeApiRequest<TrustChainResponse>('/chat/completions', {
       model: 'sonar-pro',
       messages: [
         {
@@ -184,18 +170,15 @@ export class SonarClient implements ISonarService {
         },
         {
           role: 'user',
-          content: claim.text
+          content: claim
         }
       ],
       max_tokens: trustChainTemplate.max_tokens
     });
-
-    const result = response.choices[0].message.content;
-    return JSON.parse(result);
   }
 
-  private async generateSocraticReasoning(claim: Claim): Promise<any> {
-    const response = await this.makeApiRequest('/chat/completions', {
+  private async generateSocraticReasoning(claim: string): Promise<SocraticReasoningResponse> {
+    return this.makeApiRequest<SocraticReasoningResponse>('/chat/completions', {
       model: 'sonar-pro',
       messages: [
         {
@@ -204,23 +187,10 @@ export class SonarClient implements ISonarService {
         },
         {
           role: 'user',
-          content: claim.text
+          content: claim
         }
       ],
       max_tokens: socraticTemplate.max_tokens
     });
-
-    const result = response.choices[0].message.content;
-    return JSON.parse(result);
   }
-
-  private mapVerdictToRating(verdict: string): ClaimRating {
-    const mapping: { [key: string]: ClaimRating } = {
-      'TRUE': 'TRUE',
-      'FALSE': 'FALSE',
-      'MISLEADING': 'MISLEADING',
-      'UNVERIFIABLE': 'UNVERIFIABLE'
-    };
-    return mapping[verdict] || 'UNVERIFIABLE';
-  }
-} 
+}

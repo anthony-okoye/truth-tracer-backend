@@ -1,40 +1,37 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { ClaimRepository } from './infrastructure/repositories/claim.repository';
-import { VerificationRepository } from './infrastructure/repositories/verification.repository';
-import { VerificationConfig } from './infrastructure/config/verification.config';
-import { UrlContentExtractorService } from './infrastructure/services/url-content-extractor.service';
 import { AIServicesModule } from './infrastructure/config/ai-services.module';
 import { SonarModule } from './infrastructure/sonar/sonar.module';
+import { ClaimAnalysisController } from './application/controllers/claim-analysis.controller';
+import { HealthController } from './application/controllers/health.controller';
+import { RequestTimingMiddleware } from './common/middleware/request-timing.middleware';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    AIServicesModule,
-    SonarModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_DATABASE || 'truth_tracer',
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT, 10) || 5432,
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_DATABASE,
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: process.env.NODE_ENV !== 'production',
     }),
+    AIServicesModule,
+    SonarModule,
   ],
-  controllers: [AppController],
-  providers: [
-    AppService,
-    ClaimRepository,
-    VerificationRepository,
-    VerificationConfig,
-    UrlContentExtractorService
-  ],
+  controllers: [ClaimAnalysisController, HealthController],
+  providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(RequestTimingMiddleware)
+      .forRoutes('*');
+  }
+}
