@@ -8,6 +8,9 @@ import { SonarValidationPipe } from './common/pipes/validation.pipe';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
+  // Set global prefix
+  app.setGlobalPrefix('truth-tracer');
+  
   // Global pipes
   app.useGlobalPipes(
     new ValidationPipe({
