@@ -8,6 +8,7 @@ import { VerificationRepository } from './infrastructure/repositories/verificati
 import { VerificationConfig } from './infrastructure/config/verification.config';
 import { UrlContentExtractorService } from './infrastructure/services/url-content-extractor.service';
 import { AIServicesModule } from './infrastructure/config/ai-services.module';
+import { SonarModule } from './infrastructure/sonar/sonar.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AIServicesModule } from './infrastructure/config/ai-services.module';
       isGlobal: true,
     }),
     AIServicesModule,
+    SonarModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',

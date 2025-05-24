@@ -44,16 +44,61 @@ TruthTracer is a misinformation detection platform that uses AI to analyze claim
   - Fact checking with detailed reasoning
   - Source verification and citation
   - Chain-of-thought analysis
+  - Dual-model support (sonar and sonar-pro) for quick and detailed analysis
 
 - **Trust Chain Tracing**: 
   - Tracks claim propagation across platforms
   - Analyzes source credibility
   - Maps information flow
+  - Configurable depth of analysis
 
 - **Socratic Reasoning**:
   - Step-by-step logical analysis
   - Interactive questioning
   - Evidence-based conclusions
+  - Adaptive reasoning depth
+
+## Sonar Client Implementation
+
+The Sonar client provides a flexible and modular approach to claim analysis using Perplexity's Sonar API:
+
+### Model Selection
+- **sonar**: Quick analysis for basic fact-checking
+  - Lower token usage
+  - Faster response times
+  - Basic verification
+
+- **sonar-pro**: Detailed analysis for complex claims
+  - Comprehensive fact-checking
+  - Detailed source verification
+  - In-depth reasoning
+
+### Template System
+The client uses a modular template system for different types of analysis:
+
+1. **Fact Check Templates**
+   - Quick verification format
+   - Detailed analysis format
+   - Source citation structure
+
+2. **Trust Chain Templates**
+   - Basic origin tracing
+   - Comprehensive propagation analysis
+   - Credibility scoring
+
+3. **Socratic Templates**
+   - Basic critical questioning
+   - Comprehensive reasoning tree
+   - Evidence-based conclusions
+
+### Usage Example
+```typescript
+// Quick analysis
+const quickResult = await sonarClient.analyzeClaim(claimText, ModelType.QUICK);
+
+// Detailed analysis
+const detailedResult = await sonarClient.analyzeClaim(claimText, ModelType.DETAILED);
+```
 
 ## Tech Stack
 
@@ -109,13 +154,27 @@ POST /claims/analyze
 Content-Type: application/json
 
 {
-  "input": "Claim to analyze"
+  "input": "Claim to analyze",
+  "modelType": "sonar" | "sonar-pro"  // Optional, defaults to "sonar-pro"
+}
+```
+
+### Trust Chain Analysis
+```http
+POST /claims/trace
+Content-Type: application/json
+
+{
+  "claimId": "claim-uuid",
+  "modelType": "sonar" | "sonar-pro"  // Optional, defaults to "sonar-pro"
 }
 ```
 
 ### Socratic Reasoning
 ```http
 GET /claims/socratic/:claimId
+Query Parameters:
+  modelType: "sonar" | "sonar-pro"  // Optional, defaults to "sonar-pro"
 ```
 
 ### User History
