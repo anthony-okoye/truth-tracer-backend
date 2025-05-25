@@ -33,15 +33,21 @@ async function bootstrap() {
   });
 
   // Swagger configuration
-  const config = new DocumentBuilder()
-    .setTitle('Truth Tracer API')
-    .setDescription('API for analyzing and verifying claims using multiple methods')
-    .setVersion('1.0')
-    .addTag('claims', 'Claim analysis endpoints')
-    .addBearerAuth()
-    .addServer('/truth-tracer')
-    .build();
-  
+  const swaggerConfig = new DocumentBuilder()
+  .setTitle('Truth Tracer API')
+  .setDescription('API for analyzing and verifying claims using multiple methods')
+  .setVersion('1.0')
+  .addTag('claims', 'Claim analysis endpoints')
+  .addBearerAuth();
+
+  // Conditionally add server prefix in production
+  if (process.env.NODE_ENV === 'production') {
+    swaggerConfig.addServer('/truth-tracer');
+  }
+
+  const config = swaggerConfig.build();
+
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
