@@ -134,8 +134,8 @@ npm run test:cov
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/truth-tracer.git
-cd truth-tracer
+git clone https://github.com/anthony-okoye/truth-tracer-backend.git
+cd truth-tracer-backend
 ```
 
 2. Install dependencies:
