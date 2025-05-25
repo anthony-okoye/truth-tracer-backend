@@ -72,6 +72,18 @@ You can use the Swagger UI to:
 - Try out different request parameters
 - View authentication requirements
 
+## Frontend Application
+
+The TruthTracer frontend application is available at:
+```
+https://truthtracer.netlify.app/
+```
+
+The frontend source code can be found at:
+```
+https://github.com/anthony-okoye/truth-tracer-front
+```
+
 ## Testing
 
 ### API Testing
