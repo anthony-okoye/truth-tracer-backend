@@ -39,6 +39,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addTag('claims', 'Claim analysis endpoints')
     .addBearerAuth()
+    .addServer('/truth-tracer')
     .build();
   
   const document = SwaggerModule.createDocument(app, config);
