@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AnalyzeClaimUseCase } from './analyze-claim.use-case';
 import { VerificationConfig } from '../../infrastructure/config/verification.config';
-import { UrlContentExtractorService } from '../../infrastructure/services/url-content-extractor.service';
 import { Claim, VerificationStatus, ClaimRating } from '../../domain/entities/claim.entity';
 
 describe('AnalyzeClaimUseCase', () => {
@@ -11,7 +10,6 @@ describe('AnalyzeClaimUseCase', () => {
   let trustTraceAI: any;
   let socraticAI: any;
   let claimRepository: any;
-  let urlContentExtractor: any;
 
   const mockFactCheckAI = {
     analyzeClaim: jest.fn()
@@ -29,10 +27,6 @@ describe('AnalyzeClaimUseCase', () => {
     save: jest.fn(),
     findById: jest.fn(),
     find: jest.fn()
-  };
-
-  const mockUrlContentExtractor = {
-    extractContent: jest.fn()
   };
 
   const mockConfigService = {
@@ -73,10 +67,6 @@ describe('AnalyzeClaimUseCase', () => {
         {
           provide: 'IClaimRepository',
           useValue: mockClaimRepository
-        },
-        {
-          provide: UrlContentExtractorService,
-          useValue: mockUrlContentExtractor
         }
       ],
     }).compile();
@@ -86,7 +76,6 @@ describe('AnalyzeClaimUseCase', () => {
     trustTraceAI = module.get('ITrustTraceAI');
     socraticAI = module.get('ISocraticAI');
     claimRepository = module.get('IClaimRepository');
-    urlContentExtractor = module.get(UrlContentExtractorService);
   });
 
   it('should be defined', () => {
@@ -95,12 +84,16 @@ describe('AnalyzeClaimUseCase', () => {
 
   describe('execute', () => {
     const mockText = 'This is a test claim';
-    const mockUrl = 'https://twitter.com/user/status/123456789';
 
     const mockFactCheckResult = {
       rating: 'TRUE' as ClaimRating,
       explanation: 'Test explanation',
-      sources: [{ url: 'https://test.com', title: 'Test Source' }],
+      sources: [{
+        url: 'https://test.com',
+        source: 'https://test.com',
+        title: 'Test Source',
+        reliability: 'HIGH'
+      }],
       reasoningSteps: ['Step 1', 'Step 2']
     };
 
@@ -163,57 +156,6 @@ describe('AnalyzeClaimUseCase', () => {
       expect(result.rating).toBe(mockFactCheckResult.rating);
     });
 
-    it('should process URL input successfully', async () => {
-      const extractedText = 'This is content from a URL';
-      mockUrlContentExtractor.extractContent.mockResolvedValueOnce(extractedText);
-
-      // Mock initial claim save
-      const mockInitialClaim = new Claim(
-        'test-id',
-        extractedText,
-        {
-          source: 'URL_SUBMISSION',
-          timestamp: new Date(),
-          userId: 'system',
-          originalText: extractedText,
-          url: mockUrl
-        },
-        'UNVERIFIABLE' as ClaimRating,
-        '',
-        [],
-        [],
-        undefined,
-        VerificationStatus.IN_PROGRESS
-      );
-      mockClaimRepository.save.mockResolvedValueOnce(mockInitialClaim);
-
-      // Mock AI services
-      mockFactCheckAI.analyzeClaim.mockResolvedValueOnce(mockFactCheckResult);
-      mockTrustTraceAI.traceClaim.mockResolvedValueOnce(mockTrustChainResult);
-      mockSocraticAI.generateReasoning.mockResolvedValueOnce(mockSocraticResult);
-
-      // Mock final claim save
-      const mockFinalClaim = new Claim(
-        'test-id',
-        extractedText,
-        mockInitialClaim.metadata,
-        mockFactCheckResult.rating,
-        mockFactCheckResult.explanation,
-        mockFactCheckResult.sources,
-        mockFactCheckResult.reasoningSteps,
-        undefined,
-        VerificationStatus.COMPLETED
-      );
-      mockClaimRepository.save.mockResolvedValueOnce(mockFinalClaim);
-
-      const result = await useCase.execute(mockUrl);
-
-      expect(result).toBeDefined();
-      expect(result.verificationStatus).toBe(VerificationStatus.COMPLETED);
-      expect(result.rating).toBe(mockFactCheckResult.rating);
-      expect(result.metadata.url).toBe(mockUrl);
-    });
-
     it('should handle fact check failure', async () => {
       // Mock initial claim save
       const mockInitialClaim = new Claim(
@@ -237,10 +179,26 @@ describe('AnalyzeClaimUseCase', () => {
       // Mock fact check failure
       mockFactCheckAI.analyzeClaim.mockResolvedValueOnce(null);
 
+      // Mock the failed claim save
+      const mockFailedClaim = new Claim(
+        'test-id',
+        mockText,
+        mockInitialClaim.metadata,
+        'UNVERIFIABLE' as ClaimRating,
+        'Verification failed: Fact check analysis failed',
+        [],
+        [],
+        undefined,
+        VerificationStatus.FAILED
+      );
+      mockClaimRepository.save.mockResolvedValueOnce(mockFailedClaim);
+
       const result = await useCase.execute(mockText);
 
+      expect(result).toBeDefined();
       expect(result.verificationStatus).toBe(VerificationStatus.FAILED);
       expect(result.rating).toBe('UNVERIFIABLE');
+      expect(result.explanation).toContain('Verification failed');
     });
   });
 }); 

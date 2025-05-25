@@ -60,9 +60,44 @@ TruthTracer is a misinformation detection platform that uses AI to analyze claim
 
 ## API Documentation
 
-The API documentation is available through Swagger UI at:
+The API documentation and testing interface is available through Swagger UI at:
 ```
 http://localhost:3000/api/docs
+```
+
+You can use the Swagger UI to:
+- View all available endpoints
+- Test API endpoints directly from the browser
+- View request/response schemas
+- Try out different request parameters
+- View authentication requirements
+
+## Testing
+
+### API Testing
+You can test the API endpoints using:
+1. Swagger UI at `http://localhost:3000/api/docs`
+2. cURL commands
+3. Postman or similar API testing tools
+
+### Example API Test
+```bash
+# Test claim verification
+curl -X POST http://localhost:3000/claims/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"claim": "Your claim to verify"}'
+```
+
+### Running Tests
+```bash
+# Run unit tests
+npm run test
+
+# Run e2e tests
+npm run test:e2e
+
+# Run test coverage
+npm run test:cov
 ```
 
 ## Tech Stack
@@ -80,7 +115,7 @@ http://localhost:3000/api/docs
 ### Prerequisites
 
 - Node.js (v16+)
-- PostgreSQL
+- PostgreSQL - ( Optional )
 - Perplexity Sonar API key
 
 ### Installation
