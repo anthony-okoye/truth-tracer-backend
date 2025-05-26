@@ -2,11 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { ISonarService } from '../../domain/interfaces/sonar.interface';
-import { ClaimVerificationService } from '../../domain/services/claim-verification.service';
 import { factCheckTemplate } from './templates/fact-check.template';
 import { trustChainTemplate } from './templates/trust-chain.template';
 import { socraticTemplate } from './templates/socratic.template';
-import { SonarResponseDto, AnalysisStatus } from './dto/sonar-response.dto';
+import { SonarResponseDto } from './dto/sonar-response.dto';
 import { FactCheckResponse } from '../../domain/dtos/fact-check.dto';
 import { TrustChainResponse } from '../../domain/dtos/trust-chain.dto';
 import { SocraticReasoningResponse } from '../../domain/dtos/socratic-reasoning.dto';
@@ -31,8 +30,7 @@ export class SonarClient implements ISonarService {
   private readonly config: ISonarConfig;
 
   constructor(
-    private readonly configService: ConfigService,
-    private readonly claimVerificationService: ClaimVerificationService
+    private readonly configService: ConfigService
   ) {
     this.config = this.validateConfig();
   }
@@ -83,7 +81,19 @@ export class SonarClient implements ISonarService {
         );
       }
 
-      return JSON.parse(response.data.choices[0].message.content) as T;
+      const content = response.data.choices[0].message.content;
+      
+      try {
+        return JSON.parse(content) as T;
+      } catch (parseError) {
+        this.logger.error(`Failed to parse API response as JSON: ${content}`);
+        throw new SonarApiException(
+          'API returned non-JSON response',
+          500,
+          'INVALID_JSON_RESPONSE',
+          { content }
+        );
+      }
     } catch (error) {
       if (error && typeof error === 'object' && 'isAxiosError' in error) {
         if (error.code === 'ECONNABORTED') {
@@ -120,20 +130,62 @@ export class SonarClient implements ISonarService {
     try {
       this.logger.debug(`Analyzing claim: ${claim}`);
       
+      // First attempt: Try parallel execution
       const [factCheckResult, trustChainResult, socraticResult] = await Promise.allSettled([
         this.factCheck(claim),
         this.trustChain(claim),
         this.generateSocraticReasoning(claim)
       ]);
 
+      // Check if any analysis failed
+      const hasFailures = [factCheckResult, trustChainResult, socraticResult].some(
+        result => result.status === 'rejected'
+      );
+
+      // If there are failures, retry failed analyses sequentially
+      if (hasFailures) {
+        this.logger.warn('Some analyses failed in parallel execution, retrying failed ones sequentially');
+        
+        // Retry failed analyses with a delay between each
+        const retryWithDelay = async (promise: Promise<any>, delay: number) => {
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return promise;
+        };
+
+        const factCheck = factCheckResult.status === 'rejected' 
+          ? await retryWithDelay(this.factCheck(claim), 1000)
+          : (factCheckResult as PromiseFulfilledResult<FactCheckResponse>).value;
+
+        const trustChain = trustChainResult.status === 'rejected'
+          ? await retryWithDelay(this.trustChain(claim), 1000)
+          : (trustChainResult as PromiseFulfilledResult<TrustChainResponse>).value;
+
+        const socratic = socraticResult.status === 'rejected'
+          ? await retryWithDelay(this.generateSocraticReasoning(claim), 1000)
+          : (socraticResult as PromiseFulfilledResult<SocraticReasoningResponse>).value;
+
+        return {
+          factCheck,
+          trustChain,
+          socratic,
+          status: {
+            factCheck: factCheck ? 'fulfilled' : 'rejected',
+            trustChain: trustChain ? 'fulfilled' : 'rejected',
+            socratic: socratic ? 'fulfilled' : 'rejected',
+            timestamp: new Date().toISOString()
+          }
+        };
+      }
+
+      // If all succeeded in parallel, return the results
       return {
-        factCheck: factCheckResult.status === 'fulfilled' ? factCheckResult.value : null,
-        trustChain: trustChainResult.status === 'fulfilled' ? trustChainResult.value : null,
-        socratic: socraticResult.status === 'fulfilled' ? socraticResult.value : null,
+        factCheck: (factCheckResult as PromiseFulfilledResult<FactCheckResponse>).value,
+        trustChain: (trustChainResult as PromiseFulfilledResult<TrustChainResponse>).value,
+        socratic: (socraticResult as PromiseFulfilledResult<SocraticReasoningResponse>).value,
         status: {
-          factCheck: factCheckResult.status,
-          trustChain: trustChainResult.status,
-          socratic: socraticResult.status,
+          factCheck: 'fulfilled',
+          trustChain: 'fulfilled',
+          socratic: 'fulfilled',
           timestamp: new Date().toISOString()
         }
       };

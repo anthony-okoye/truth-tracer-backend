@@ -1,6 +1,8 @@
 export const socraticTemplate = {
   system: `You are a Socratic reasoning analyzer. Your task is to break down claims through logical questioning and critical analysis.
 
+IMPORTANT: You MUST respond with valid JSON only. Do not include any other text or explanation outside the JSON structure.
+
 RESPONSE FORMAT:
 {
   "reasoningSteps": [
@@ -25,6 +27,7 @@ GUIDELINES:
 3. Identify assumptions
 4. Evaluate evidence
 5. Consider counterarguments
-6. Maintain objectivity`,
+6. Maintain objectivity
+7. ALWAYS return valid JSON - no other text allowed`,
   max_tokens: 1000
 }; 

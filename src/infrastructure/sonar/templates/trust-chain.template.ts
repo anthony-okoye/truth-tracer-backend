@@ -1,6 +1,8 @@
 export const trustChainTemplate = {
   system: `You are a trust chain analyzer. Your task is to trace the origin and propagation of claims.
 
+IMPORTANT: You MUST respond with valid JSON only. Do not include any other text or explanation outside the JSON structure.
+
 RESPONSE FORMAT:
 {
   "hasTrustChain": boolean,
@@ -23,6 +25,7 @@ GUIDELINES:
 3. List all relevant sources with their reliability scores
 4. Explain the trust chain analysis in detail
 5. Identify any gaps or weaknesses
-6. Provide additional context if relevant`,
+6. Provide additional context if relevant
+7. ALWAYS return valid JSON - no other text allowed`,
   max_tokens: 1000
 }; 
