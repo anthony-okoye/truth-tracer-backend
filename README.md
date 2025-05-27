@@ -40,23 +40,128 @@ TruthTracer is a misinformation detection platform that uses AI to analyze claim
 
 ## Features
 
-- **Claim Analysis**: Analyzes text content using Perplexity's Sonar API
+- **Claim Analysis**: 
+  - Analyzes text content using Perplexity's Sonar API
   - Fact checking with detailed reasoning
   - Source verification and citation
   - Chain-of-thought analysis
   - Parallel processing of multiple analysis methods
 
 - **Trust Chain Tracing**: 
-  - Tracks claim propagation across platforms
+  - Tracks claim propagation across platforms using Perplexity's Sonar API
   - Analyzes source credibility
   - Maps information flow
   - Configurable depth of analysis
 
 - **Socratic Reasoning**:
-  - Step-by-step logical analysis
+  - Step-by-step logical analysis using Perplexity's Sonar API
   - Interactive questioning
   - Evidence-based conclusions
   - Adaptive reasoning depth
+
+## Perplexity API Integration
+
+The application uses Perplexity's Sonar API for claim analysis through three main methods:
+
+### API Endpoints
+- Base URL: `https://api.perplexity.ai`
+- Endpoint: `/chat/completions`
+- Models: `sonar` and `sonar-pro`
+
+### Analysis Types
+
+1. **Fact Check Analysis**
+   - Model: `sonar`
+   - Returns: Verdict (TRUE/FALSE/MISLEADING/UNVERIFIABLE)
+   - Includes sources and explanations
+   - Max tokens: 500
+
+2. **Trust Chain Analysis**
+   - Model: `sonar-pro`
+   - Returns: Trust chain verification with confidence scores
+   - Includes source reliability analysis
+   - Max tokens: 1000
+
+3. **Socratic Reasoning**
+   - Model: `sonar-pro`
+   - Returns: Step-by-step logical analysis
+   - Includes evidence and implications
+   - Max tokens: 1000
+
+### Request Format
+```typescript
+{
+  model: 'sonar' | 'sonar-pro',
+  messages: [
+    {
+      role: 'system',
+      content: string // Template content
+    },
+    {
+      role: 'user',
+      content: string // Claim to analyze
+    }
+  ],
+  max_tokens: number
+}
+```
+
+### Response Format
+All responses are in JSON format with specific schemas for each analysis type:
+
+1. **Fact Check Response**
+```typescript
+{
+  verdict: "TRUE" | "FALSE" | "MISLEADING" | "UNVERIFIABLE",
+  explanation: string,
+  sources: Array<{
+    title: string,
+    url: string,
+    reliability: "High" | "Medium" | "Low"
+  }>
+}
+```
+
+2. **Trust Chain Response**
+```typescript
+{
+  hasTrustChain: boolean,
+  confidence: number,
+  sources: Array<{
+    name: string,
+    url: string,
+    reliability: number
+  }>,
+  explanation: string,
+  gaps: string[],
+  context: string
+}
+```
+
+3. **Socratic Response**
+```typescript
+{
+  reasoningSteps: Array<{
+    question: string,
+    analysis: string,
+    evidence: string,
+    implications: string
+  }>,
+  conclusion: {
+    logicalValidity: string,
+    keyFlaws: string,
+    strengths: string,
+    recommendations: string
+  }
+}
+```
+
+### Error Handling
+- Automatic retries for failed requests (configurable)
+- Timeout handling
+- JSON parsing validation
+- Rate limiting consideration
+
 
 ## API Documentation
 
