@@ -1,26 +1,29 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { SonarModule } from '../sonar/sonar.module';
 import { SonarClient } from '../sonar/sonar.client';
 import { ClaimVerificationService } from '../../domain/services/claim-verification.service';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [
+    ConfigModule,
+    SonarModule
+  ],
   providers: [
     {
       provide: 'IFactCheckAI',
-      useClass: SonarClient
+      useExisting: SonarClient
     },
     {
       provide: 'ITrustTraceAI',
-      useClass: SonarClient
+      useExisting: SonarClient
     },
     {
       provide: 'ISocraticAI',
-      useClass: SonarClient
+      useExisting: SonarClient
     },
-    SonarClient,
     ClaimVerificationService
   ],
-  exports: ['IFactCheckAI', 'ITrustTraceAI', 'ISocraticAI', SonarClient, ClaimVerificationService]
+  exports: ['IFactCheckAI', 'ITrustTraceAI', 'ISocraticAI', ClaimVerificationService]
 })
 export class AIServicesModule {} 

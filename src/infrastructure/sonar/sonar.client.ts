@@ -15,6 +15,8 @@ import {
   SonarConfigurationException 
 } from '../../common/exceptions/sonar.exceptions';
 import { ISonarConfig } from '../../domain/interfaces/config.interface';
+import { SonarResponseSanitizer } from './response-sanitizer';
+import { TokenMonitorService, TokenUsageMetrics } from '../../domain/services/token-monitor.service';
 
 interface PerplexityResponse {
   choices: Array<{
@@ -22,6 +24,11 @@ interface PerplexityResponse {
       content: string;
     };
   }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 @Injectable()
@@ -30,7 +37,9 @@ export class SonarClient implements ISonarService {
   private readonly config: ISonarConfig;
 
   constructor(
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly responseSanitizer: SonarResponseSanitizer,
+    private readonly tokenMonitor: TokenMonitorService
   ) {
     this.config = this.validateConfig();
   }
@@ -81,19 +90,46 @@ export class SonarClient implements ISonarService {
         );
       }
 
+      // Record token usage if available
+      if (response.data.usage) {
+        const metrics: TokenUsageMetrics = {
+          endpoint,
+          usage: {
+            promptTokens: response.data.usage.prompt_tokens,
+            completionTokens: response.data.usage.completion_tokens,
+            totalTokens: response.data.usage.total_tokens
+          },
+          maxTokens: data.max_tokens,
+          timestamp: new Date()
+        };
+        this.tokenMonitor.recordTokenUsage(metrics);
+      }
+
       const content = response.data.choices[0].message.content;
       
-      try {
-        return JSON.parse(content) as T;
-      } catch (parseError) {
-        this.logger.error(`Failed to parse API response as JSON: ${content}`);
+      // Use the response sanitizer
+      const sanitizedResult = this.responseSanitizer.sanitizeResponse<T>(content);
+      
+      if (!sanitizedResult.success) {
+        this.logger.error('Failed to sanitize API response', {
+          steps: sanitizedResult.sanitizationSteps,
+          error: sanitizedResult.error,
+          originalResponse: sanitizedResult.originalResponse
+        });
+        
         throw new SonarApiException(
-          'API returned non-JSON response',
+          'Failed to sanitize API response',
           500,
-          'INVALID_JSON_RESPONSE',
-          { content }
+          'SANITIZATION_FAILED',
+          {
+            steps: sanitizedResult.sanitizationSteps,
+            error: sanitizedResult.error
+          }
         );
       }
+
+      return sanitizedResult.data;
+
     } catch (error) {
       if (error && typeof error === 'object' && 'isAxiosError' in error) {
         if (error.code === 'ECONNABORTED') {
@@ -214,7 +250,7 @@ export class SonarClient implements ISonarService {
 
   private async trustChain(claim: string): Promise<TrustChainResponse> {
     return this.makeApiRequest<TrustChainResponse>('/chat/completions', {
-      model: 'sonar-pro',
+      model: 'sonar-reasoning',
       messages: [
         {
           role: 'system',
@@ -231,7 +267,7 @@ export class SonarClient implements ISonarService {
 
   private async generateSocraticReasoning(claim: string): Promise<SocraticReasoningResponse> {
     return this.makeApiRequest<SocraticReasoningResponse>('/chat/completions', {
-      model: 'sonar-pro',
+      model: 'sonar-reasoning',
       messages: [
         {
           role: 'system',

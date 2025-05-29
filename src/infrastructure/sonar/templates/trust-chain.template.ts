@@ -27,5 +27,5 @@ GUIDELINES:
 5. Identify any gaps or weaknesses
 6. Provide additional context if relevant
 7. ALWAYS return valid JSON - no other text allowed`,
-  max_tokens: 1000
+  max_tokens: 2500
 }; 

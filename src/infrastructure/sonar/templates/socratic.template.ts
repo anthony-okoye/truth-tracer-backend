@@ -29,5 +29,5 @@ GUIDELINES:
 5. Consider counterarguments
 6. Maintain objectivity
 7. ALWAYS return valid JSON - no other text allowed`,
-  max_tokens: 1000
+  max_tokens: 4000
 }; 

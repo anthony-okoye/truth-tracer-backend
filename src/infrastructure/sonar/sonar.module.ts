@@ -1,19 +1,22 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SonarClient } from './sonar.client';
-import { ClaimVerificationService } from '../../domain/services/claim-verification.service';
+import { SonarResponseSanitizer } from './response-sanitizer';
+import { TokenMonitorService } from '../../domain/services/token-monitor.service';
 
 export const SONAR_SERVICE = 'SONAR_SERVICE';
 
 @Module({
   imports: [ConfigModule],
   providers: [
-    ClaimVerificationService,
+    SonarClient,
+    SonarResponseSanitizer,
+    TokenMonitorService,
     {
       provide: SONAR_SERVICE,
-      useClass: SonarClient
+      useExisting: SonarClient
     }
   ],
-  exports: [SONAR_SERVICE]
+  exports: [SonarClient, SONAR_SERVICE, TokenMonitorService]
 })
 export class SonarModule {} 

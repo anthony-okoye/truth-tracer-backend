@@ -66,7 +66,7 @@ The application uses Perplexity's Sonar API for claim analysis through three mai
 ### API Endpoints
 - Base URL: `https://api.perplexity.ai`
 - Endpoint: `/chat/completions`
-- Models: `sonar` and `sonar-pro`
+- Models: `sonar` and `sonar-reasoning`
 
 ### Analysis Types
 
@@ -77,21 +77,21 @@ The application uses Perplexity's Sonar API for claim analysis through three mai
    - Max tokens: 500
 
 2. **Trust Chain Analysis**
-   - Model: `sonar-pro`
+   - Model: `sonar-reasoning`
    - Returns: Trust chain verification with confidence scores
    - Includes source reliability analysis
-   - Max tokens: 1000
+   - Max tokens: 2500
 
 3. **Socratic Reasoning**
-   - Model: `sonar-pro`
+   - Model: `sonar-reasoning`
    - Returns: Step-by-step logical analysis
    - Includes evidence and implications
-   - Max tokens: 1000
+   - Max tokens: 4000
 
 ### Request Format
 ```typescript
 {
-  model: 'sonar' | 'sonar-pro',
+  model: 'sonar' | 'sonar-reasoning',
   messages: [
     {
       role: 'system',
@@ -255,7 +255,7 @@ PORT=3030
 NODE_ENV=development
 
 # CORS Configuration
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080,https://truthtracer.netlify.app/
 
 # Database Configuration
 DB_HOST=localhost
