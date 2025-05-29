@@ -66,7 +66,7 @@ The application uses Perplexity's Sonar API for claim analysis through three mai
 ### API Endpoints
 - Base URL: `https://api.perplexity.ai`
 - Endpoint: `/chat/completions`
-- Models: `sonar` and `sonar-reasoning`
+- Models: `sonar`, `sonar-reasoning`, `sonar-deep-research`
 
 ### Analysis Types
 
@@ -77,7 +77,7 @@ The application uses Perplexity's Sonar API for claim analysis through three mai
    - Max tokens: 500
 
 2. **Trust Chain Analysis**
-   - Model: `sonar-reasoning`
+   - Model: `sonar-deep-research`
    - Returns: Trust chain verification with confidence scores
    - Includes source reliability analysis
    - Max tokens: 2500
@@ -91,7 +91,7 @@ The application uses Perplexity's Sonar API for claim analysis through three mai
 ### Request Format
 ```typescript
 {
-  model: 'sonar' | 'sonar-reasoning',
+  model: 'sonar' | 'sonar-reasoning' | 'sonar-deep-research',
   messages: [
     {
       role: 'system',

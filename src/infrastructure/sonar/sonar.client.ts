@@ -250,7 +250,7 @@ export class SonarClient implements ISonarService {
 
   private async trustChain(claim: string): Promise<TrustChainResponse> {
     return this.makeApiRequest<TrustChainResponse>('/chat/completions', {
-      model: 'sonar-reasoning',
+      model: 'sonar-deep-research',
       messages: [
         {
           role: 'system',
