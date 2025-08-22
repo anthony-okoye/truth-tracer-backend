@@ -658,3 +658,496 @@ docker-compose down
 ## 📄 **License**
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🏗️ **Domain Layer Architecture**
+
+### **Core Entities**
+
+#### **Claim Entity**
+```typescript
+export class Claim {
+  constructor(
+    public readonly id: string,
+    public readonly text: string,
+    public readonly metadata: ClaimMetadata,
+    public readonly rating: ClaimRating,
+    public readonly explanation: string,
+    public readonly sources: Citation[],
+    public readonly reasoningSteps: string[],
+    public readonly trustChain?: TrustChain,
+    public readonly verificationStatus: VerificationStatus = VerificationStatus.PENDING,
+    public readonly confidenceLevel?: ConfidenceLevel,
+    public readonly confidenceScore?: number,
+    public readonly verificationEvidence?: VerificationEvidence,
+    public readonly verificationMetadata?: VerificationMetadata,
+  ) {}
+}
+```
+
+**Entity Properties**:
+- **id**: Unique identifier (UUID)
+- **text**: The claim text to be analyzed
+- **metadata**: Source, timestamp, user, and verification level
+- **rating**: Verdict (TRUE/FALSE/MISLEADING/UNVERIFIABLE)
+- **explanation**: Detailed reasoning for the verdict
+- **sources**: Array of supporting citations
+- **reasoningSteps**: Step-by-step analysis process
+- **trustChain**: Optional trust chain analysis
+- **verificationStatus**: Current processing status
+- **confidenceLevel**: Qualitative confidence assessment
+- **confidenceScore**: Quantitative confidence (0-1)
+- **verificationEvidence**: Supporting and contradicting evidence
+- **verificationMetadata**: Processing details and model information
+
+#### **Trust Chain Entity**
+```typescript
+export class TrustChain {
+  constructor(
+    public id: string,
+    public claimId: string,
+    public originalSource: string,
+    public propagationPath: SourceNode[],
+    public createdAt: Date,
+    public updatedAt: Date
+  ) {}
+}
+
+export class SourceNode {
+  constructor(
+    public url: string,
+    public title: string,
+    public credibility: number, // 0-1 scale
+    public timestamp: Date
+  ) {}
+}
+```
+
+**Trust Chain Features**:
+- **Source Tracking**: Maps information flow from origin to current state
+- **Credibility Scoring**: Numerical reliability assessment (0-1)
+- **Temporal Analysis**: Tracks when information was published/modified
+- **Propagation Mapping**: Shows how claims spread across sources
+
+#### **Socratic Reasoning Entity**
+```typescript
+export class SocraticReasoning {
+  constructor(
+    public readonly id: string,
+    public readonly claimId: string,
+    public readonly reasoningTree: ReasoningNode[],
+    public readonly questions: string[],
+    public readonly createdAt: Date,
+    public readonly updatedAt: Date,
+  ) {}
+}
+
+export interface ReasoningNode {
+  id: string;
+  type: 'PREMISE' | 'EVIDENCE' | 'CONCLUSION' | 'QUESTION';
+  content: string;
+  children: string[]; // IDs of child nodes
+}
+```
+
+**Reasoning Structure**:
+- **Tree-based Logic**: Hierarchical reasoning with parent-child relationships
+- **Node Types**: Premises, evidence, conclusions, and questions
+- **Content Tracking**: Detailed content for each reasoning step
+- **Relationship Mapping**: Links between different reasoning elements
+
+### **Domain Interfaces**
+
+#### **AI Services Interface**
+```typescript
+export interface IFactCheckAI {
+  analyzeClaim(text: string): Promise<FactCheckResult>;
+}
+
+export interface ITrustTraceAI {
+  traceClaim(claim: Claim): Promise<TrustChainResult>;
+}
+
+export interface ISocraticAI {
+  generateReasoning(claim: Claim): Promise<SocraticReasoningResult>;
+}
+```
+
+**Interface Design Principles**:
+- **Separation of Concerns**: Each AI service handles one analysis type
+- **Dependency Inversion**: High-level modules depend on abstractions
+- **Testability**: Easy to mock and test individual components
+- **Extensibility**: New AI providers can implement these interfaces
+
+#### **Verification Service Interface**
+```typescript
+export interface IVerificationService {
+  verifyClaim(prompt: VerificationPrompt): Promise<Verification>;
+  getVerificationStatus(id: string): Promise<Verification>;
+  cancelVerification(id: string): Promise<void>;
+  getVerificationHistory(filters?: VerificationFilters): Promise<Verification[]>;
+}
+```
+
+**Service Capabilities**:
+- **Claim Verification**: Full verification pipeline execution
+- **Status Tracking**: Real-time verification progress monitoring
+- **Cancellation**: Ability to stop ongoing verifications
+- **History Management**: Filtered verification result retrieval
+
+#### **Response Sanitizer Interface**
+```typescript
+export interface IResponseSanitizer {
+  sanitizeResponse<T>(response: string): SanitizationResult<T>;
+  isValidJSON(str: string): boolean;
+}
+
+export interface SanitizationResult<T> {
+  success: boolean;
+  data: T | null;
+  error?: string;
+  originalResponse: string;
+  sanitizationSteps: string[];
+}
+```
+
+**Sanitization Features**:
+- **JSON Validation**: Ensures response is valid JSON
+- **Error Recovery**: Attempts to extract valid data from malformed responses
+- **Step Tracking**: Records each sanitization attempt for debugging
+- **Type Safety**: Generic type support for different response types
+
+## 🔧 **Middleware & Guards Implementation**
+
+### **Request Timing Middleware**
+```typescript
+@Injectable()
+export class RequestTimingMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    const start = Date.now();
+    const { method, originalUrl } = req;
+
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const { statusCode } = res;
+
+      this.logger.log(
+        `${method} ${originalUrl} ${statusCode} - ${duration}ms`
+      );
+    });
+
+    next();
+  }
+}
+```
+
+**Performance Monitoring**:
+- **Request Duration**: Tracks time from start to completion
+- **Status Code Logging**: Records HTTP response status
+- **Method Tracking**: Logs HTTP method and endpoint
+- **Performance Insights**: Identifies slow endpoints and bottlenecks
+
+### **JWT Authentication Guard**
+```typescript
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  canActivate(context: ExecutionContext) {
+    return super.canActivate(context);
+  }
+
+  handleRequest(err: any, user: any) {
+    if (err || !user) {
+      throw err || new UnauthorizedException();
+    }
+    return user;
+  }
+}
+```
+
+**Security Features**:
+- **Token Validation**: Verifies JWT token authenticity
+- **User Authentication**: Ensures valid user session
+- **Error Handling**: Proper unauthorized access handling
+- **Context Integration**: Seamless NestJS integration
+
+### **Validation Pipe**
+```typescript
+@Injectable()
+export class SonarValidationPipe implements PipeTransform<any> {
+  async transform(value: any, { metatype }: ArgumentMetadata) {
+    if (!metatype || !this.toValidate(metatype)) {
+      return value;
+    }
+
+    const object = plainToClass(metatype, value);
+    const errors = await validate(object);
+
+    if (errors.length > 0) {
+      const validationErrors = errors.map(error => ({
+        field: error.property,
+        constraints: error.constraints,
+        value: error.value
+      }));
+
+      throw new SonarValidationException(
+        'Validation failed',
+        validationErrors[0].field,
+        validationErrors[0].value
+      );
+    }
+
+    return object;
+  }
+}
+```
+
+**Validation Features**:
+- **Class Validation**: Uses class-validator decorators
+- **Type Transformation**: Converts plain objects to class instances
+- **Error Mapping**: Provides detailed validation error information
+- **Exception Handling**: Custom validation exception types
+
+## 🏗️ **Infrastructure Layer Components**
+
+### **Sonar Module Configuration**
+```typescript
+@Module({
+  imports: [ConfigModule],
+  providers: [
+    SonarClient,
+    SonarResponseSanitizer,
+    TokenMonitorService,
+    {
+      provide: SONAR_SERVICE,
+      useExisting: SonarClient
+    }
+  ],
+  exports: [SonarClient, SONAR_SERVICE, TokenMonitorService]
+})
+export class SonarModule {}
+```
+
+**Module Architecture**:
+- **Dependency Injection**: Proper service registration and injection
+- **Service Export**: Makes services available to other modules
+- **Configuration Integration**: Integrates with NestJS config system
+- **Token-based Service**: Uses injection tokens for service identification
+
+### **AI Services Module**
+```typescript
+@Module({
+  imports: [ConfigModule, SonarModule],
+  providers: [
+    {
+      provide: 'IFactCheckAI',
+      useExisting: SonarClient
+    },
+    {
+      provide: 'ITrustTraceAI',
+      useExisting: SonarClient
+    },
+    {
+      provide: 'ISocraticAI',
+      useExisting: SonarClient
+    },
+    ClaimVerificationService
+  ],
+  exports: ['IFactCheckAI', 'ITrustTraceAI', 'ISocraticAI', ClaimVerificationService]
+})
+export class AIServicesModule {}
+```
+
+**Service Registration**:
+- **Interface Mapping**: Maps interfaces to concrete implementations
+- **Service Aliasing**: Multiple interfaces can use the same service
+- **Dependency Management**: Centralized service dependency management
+- **Export Strategy**: Makes services available to consuming modules
+
+### **Configuration Management**
+```typescript
+@Injectable()
+export class VerificationConfig {
+  get confidenceWeights() {
+    return {
+      FACT_CHECK: this.configService.get<number>('CONFIDENCE_WEIGHT_FACT_CHECK', 0.35),
+      TRUST_CHAIN: this.configService.get<number>('CONFIDENCE_WEIGHT_TRUST_CHAIN', 0.25),
+      SOCRATIC_REASONING: this.configService.get<number>('CONFIDENCE_WEIGHT_SOCRATIC', 0.20),
+      SOURCE_RELIABILITY: this.configService.get<number>('CONFIDENCE_WEIGHT_SOURCE', 0.15),
+      EVIDENCE_CONSISTENCY: this.configService.get<number>('CONFIDENCE_WEIGHT_CONSISTENCY', 0.05)
+    };
+  }
+
+  get reputableDomains(): string[] {
+    const domains = this.configService.get<string>('REPUTABLE_DOMAINS', 
+      'reuters.com,apnews.com,bbc.com,nytimes.com,washingtonpost.com,theguardian.com,nature.com,science.org,academic.edu,gov,edu,linkedin.com,twitter.com,facebook.com,instagram.com,reddit.com'
+    );
+    return domains.split(',').map(d => d.trim());
+  }
+}
+```
+
+**Configuration Features**:
+- **Environment Integration**: Reads from environment variables
+- **Default Values**: Provides sensible defaults for optional configs
+- **Type Safety**: Ensures configuration values are properly typed
+- **Domain Management**: Configurable reputable domain lists
+
+## ⚡ **Performance & Optimization**
+
+### **Parallel Processing Strategy**
+```typescript
+// The SonarClient executes all three analysis methods simultaneously
+async analyzeClaim(claim: string): Promise<SonarResponseDto> {
+  // Parallel execution of fact-check, trust-chain, and socratic analysis
+  const [factCheckResult, trustChainResult, socraticResult] = await Promise.all([
+    this.performFactCheck(claim),
+    this.performTrustChainAnalysis(claim),
+    this.performSocraticReasoning(claim)
+  ]);
+
+  return this.combineResults(factCheckResult, trustChainResult, socraticResult);
+}
+```
+
+**Performance Benefits**:
+- **Reduced Latency**: All analyses run concurrently instead of sequentially
+- **Resource Utilization**: Maximizes API endpoint usage
+- **User Experience**: Faster response times for comprehensive analysis
+- **Scalability**: Easy to add more analysis methods without performance impact
+
+### **Token Usage Optimization**
+```typescript
+@Injectable()
+export class TokenMonitorService {
+  public recordTokenUsage(metrics: TokenUsageMetrics): void {
+    this.metrics.push(metrics);
+    this.logTokenUsage(metrics);
+    
+    // Warn when usage exceeds 90% of limits
+    const usagePercentage = (metrics.usage.completionTokens / metrics.maxTokens) * 100;
+    if (usagePercentage > 90) {
+      this.logger.warn(`High token usage detected: ${usagePercentage.toFixed(2)}%`);
+    }
+  }
+}
+```
+
+**Optimization Features**:
+- **Usage Monitoring**: Tracks token consumption patterns
+- **Performance Alerts**: Warns about high token usage
+- **Cost Management**: Helps optimize API usage costs
+- **Trend Analysis**: Identifies usage patterns for optimization
+
+### **Response Caching Strategy**
+```typescript
+// Future enhancement: Implement response caching
+interface CachedResponse {
+  claim: string;
+  result: SonarResponseDto;
+  timestamp: Date;
+  ttl: number; // Time to live in milliseconds
+}
+
+// Cache frequently analyzed claims to reduce API calls
+private async getCachedResponse(claim: string): Promise<SonarResponseDto | null> {
+  const cached = this.cache.get(claim);
+  if (cached && Date.now() - cached.timestamp.getTime() < cached.ttl) {
+    return cached.result;
+  }
+  return null;
+}
+```
+
+**Caching Benefits**:
+- **Reduced API Calls**: Caches identical claim analyses
+- **Faster Responses**: Returns cached results for repeated claims
+- **Cost Savings**: Minimizes Perplexity API usage
+- **Scalability**: Improves performance under high load
+
+### **Error Handling & Retry Logic**
+```typescript
+private async makeApiRequest<T>(
+  endpoint: string, 
+  data: any, 
+  retryCount = 0
+): Promise<T> {
+  try {
+    const response = await axios.post<PerplexityResponse>(
+      `${this.config.baseUrl}${endpoint}`,
+      data,
+      {
+        headers: { 'Authorization': `Bearer ${this.config.apiKey}` },
+        timeout: this.config.timeout,
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (retryCount < this.config.maxRetries) {
+      await this.delay(this.config.retryDelay * Math.pow(2, retryCount));
+      return this.makeApiRequest(endpoint, data, retryCount + 1);
+    }
+    throw error;
+  }
+}
+```
+
+**Resilience Features**:
+- **Exponential Backoff**: Intelligent retry timing
+- **Configurable Retries**: Adjustable retry attempts
+- **Timeout Handling**: Prevents hanging requests
+- **Error Propagation**: Proper error handling and logging
+
+## 🔍 **Monitoring & Observability**
+
+### **Request Correlation**
+```typescript
+// Each request gets a unique correlation ID for tracing
+const correlationId = request.headers['x-correlation-id'] || crypto.randomUUID();
+
+// Log all operations with correlation ID for easy debugging
+this.logger.log(`Processing claim analysis`, { correlationId, claimId });
+```
+
+**Tracing Benefits**:
+- **Request Tracking**: Follow requests through the entire system
+- **Debugging**: Easy to trace issues across multiple services
+- **Performance Analysis**: Identify bottlenecks in request flow
+- **Error Correlation**: Link errors to specific requests
+
+### **Structured Logging**
+```typescript
+// Consistent logging format across all services
+this.logger.log('Claim analysis completed', {
+  claimId: claim.id,
+  duration: Date.now() - startTime,
+  confidence: result.confidence,
+  sources: result.sources.length,
+  correlationId
+});
+```
+
+**Logging Features**:
+- **Structured Data**: Machine-readable log format
+- **Performance Metrics**: Request duration and resource usage
+- **Business Context**: Relevant business data in logs
+- **Searchability**: Easy to search and filter logs
+
+### **Health Check Monitoring**
+```typescript
+@Get()
+async check() {
+  return {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    services: {
+      sonar: 'ok', // Check Sonar API connectivity
+      // Future: Add more service health checks
+    }
+  };
+}
+```
+
+**Health Monitoring**:
+- **Service Status**: Real-time service health information
+- **API Connectivity**: Monitor external API availability
+- **System Metrics**: Track system performance and availability
+- **Alerting**: Trigger alerts when services are unhealthy
