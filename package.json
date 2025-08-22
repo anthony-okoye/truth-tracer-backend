@@ -18,7 +18,13 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:claim": "ts-node src/test/test-claim.ts"
+    "test:claim": "ts-node src/test/test-claim.ts",
+    "docker:build": "docker build -t truth-tracer .",
+    "docker:run": "docker run -p 3030:3030 --env-file .env truth-tracer",
+    "docker:compose": "docker-compose up --build",
+    "docker:compose:dev": "docker-compose up --build -d",
+    "docker:compose:down": "docker-compose down",
+    "docker:clean": "docker system prune -f && docker image prune -f"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.1",
